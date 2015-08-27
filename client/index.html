@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>使用websocket接收服务端传过来的二进制图片,并用canvas画出来</title>
+    <script>
+        var main = {
+            // 将字符串转为字节数组
+            string2Bin: function(str) {
+                var result = [];
+                for (var i = 0; i < str.length; i++) {
+                    result.push(str.charCodeAt(i));
+                }
+                return result;
+            },
+            // 将字节数组转为字符串
+            bin2String: function(array) {
+                return String.fromCharCode.apply(String, array);
+            },
+            // 记录log
+            log: function(str){
+                console.log(str);
+                var logDom = document.getElementById("log");
+                logDom.innerHTML = logDom.innerHTML + '<hr><p>' + str + '</p>';
+            },
+
+            // 初始化websocket
+            initWebSocket:function(){
+                var self = this;
+                // 创建一个Socket实例
+                var socket = new WebSocket('ws://localhost:3006');
+                this.socket = socket;
+                // 打开Socket
+                socket.onopen = function (event) {
+                    // 监听消息
+                    socket.onmessage = function (event) {
+                        if (typeof(event.data) == "string") {
+                            // string的方式
+                            self.log("socket 已经连接上");
+                        } else {
+                            self.reader.readAsArrayBuffer(event.data);
+                        }
+                    };
+                    // 监听Socket的关闭
+                    socket.onclose = function (event) {
+                        self.log("socket 关闭");
+                    };
+                }
+            },
+            // 初始化canvas
+            initCanvas: function(){
+                var self = this;
+                this.MyCanvas = document.getElementById("vnc_canvas");
+                if (!this.MyCanvas.getContext) {
+                    self.log("Canvas not supported. Please install a HTML5 compatible browser.");
+                    return;
+                }
+                // get 2D context of canvas and draw rectangel
+                this.ctx = this.MyCanvas.getContext("2d");
+                this.ctx.fillStyle = "#EEEEFF";
+                this.ctx.fillRect(0, 0, 800, 600);
+            },
+            // 绘制图片
+            drawImg: function(url,x,y,w,h){
+                var self = this;
+                x = x || 30;
+                y = y || 30;
+                w = w || 100;
+                h = h || 100;
+                this.ctx.clearRect(x, y, w, h);
+                var image = new Image();
+                image.src = url;
+                image.onload = function () {
+                    self.ctx.drawImage(image, x, y, w, h);
+                }
+            },
+            // 初始化文件api
+            initFileReader: function(){
+                var self = this;
+                this.reader = new FileReader();
+                this.ImgReader = new FileReader();
+                var x, y, w, h, len, imgDataArr, uint8Array, arrayBuffer, blob;
+                this.reader.onload = function(evt){
+                    if(evt.target.readyState == FileReader.DONE){
+                        var data = new Uint8Array(evt.target.result);
+                        // 转化为真正的数组
+                        data = [].slice.call(data,0);
+                        // 取出128位要来解析参数
+                        var paramsData = data.slice(0,128);
+                        // 转化为字节字符串
+                        var byteStr = self.bin2String(paramsData);
+                        // 然后再转化为普通数组
+                        self.log(byteStr);
+                        var arr = byteStr.replace("[","").replace("]","").split(",");
+                        // 接下来就可以得到各个参数
+                        x = arr[0].split("=")[1];
+                        y = arr[1].split("=")[1];
+                        w = arr[2].split("=")[1];
+                        h = arr[3].split("=")[1];
+                        len = arr[4].split("=")[1];
+                        // 接下来只要得到图片的数据即可,获取图片所属的二进制字节数组
+                        imgDataArr = data.slice(128,len);
+                        uint8Array  = new Uint8Array(imgDataArr);
+                        arrayBuffer = uint8Array.buffer;
+                        blob = new Blob([arrayBuffer]);
+                        self.ImgReader.readAsDataURL(blob);
+                    }
+                };
+                this.ImgReader.onload = function(evt){
+                    if(evt.target.readyState == FileReader.DONE){
+                        var url = evt.target.result;
+                        self.drawImg(url,x,y,w,h);
+                    }
+                };
+            },
+            // 初始化
+            init: function() {
+                // 初始化 websocket
+                this.initWebSocket();
+                this.initCanvas();
+                this.initFileReader();
+            }
+        };
+        window.onload = function(){
+            main.init();
+        };
+        var startVNC = function(){
+            main.socket.send(JSON.stringify({
+                action: 2
+            }));
+        };
+        var stopVNC = function(){
+            main.socket.send(JSON.stringify({
+                action: 3
+            }));
+        };
+        var setVNCOperate = function(){
+            main.socket.send(JSON.stringify({
+                action: 4,
+                data: document.getElementById("timeDelay").value
+            }));
+        };
+        var clearCanvas = function(){
+            main.ctx.clearRect(0, 0, 800, 600);
+        };
+    </script>
+</head>
+<body>
+<button id="clear" onclick="clearCanvas()">清空画布</button>
+<button id="start" onclick="startVNC()">开始传输</button>
+<button id="stop" onclick="stopVNC()">停止传输</button>
+<button id="set" onclick="setVNCOperate()">设置传输的间隔（以豪秒为单位）</button>
+<input id="timeDelay" value="300"/>
+<hr>
+<h3>以下是画布容器</h3>
+<div id="vnc">
+    <canvas id="vnc_canvas" width="800px" height="600px"></canvas>
+</div>
+<div id="log"></div>
+</body>
+</html>

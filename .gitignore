@@ -1,0 +1,6 @@
+Thumbs.db
+backup/
+node_modules/
+storage/
+*.iml
+.idea
