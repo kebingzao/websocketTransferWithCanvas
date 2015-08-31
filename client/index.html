@@ -98,7 +98,7 @@
                         h = arr[3].split("=")[1];
                         len = arr[4].split("=")[1];
                         // 接下来只要得到图片的数据即可,获取图片所属的二进制字节数组
-                        imgDataArr = data.slice(128,len);
+                        imgDataArr = data.slice(128,len + 128);
                         uint8Array  = new Uint8Array(imgDataArr);
                         arrayBuffer = uint8Array.buffer;
                         blob = new Blob([arrayBuffer]);
